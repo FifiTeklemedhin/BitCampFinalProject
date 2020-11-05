@@ -1,25 +1,55 @@
 import logging
-
-
 import azure.functions as func
+
 import requests #html requests
 from bs4 import BeautifulSoup
-#TODO: take in information from js page, then set scraped price as original price and current price, then input it into sql database
+
+import pyodbc
+
+#TODO: sql only updates the second parameter, not actually saving in db?
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
+     
+     
+    server = 'bitcamp.database.windows.net'
+    database = 'PriceScraper'
+    username = 'fi.leul3562'
+    password = 'Mrs.McKitty101'
+    cnxn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+ password)
+    cursor = cnxn.cursor()
+    row_str = ""
 
-    name = req.params.get('name')
-    if not name:
+    
+
+    
+
+   
+    phonenumber = req.params.get('phonenumber')
+    url = req.params.get('url')
+    baseline_percentage = req.params.get('baseline_percentage')
+    duration = req.params.get('duration')
+
+    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url),url)
+    cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
+    row = cursor.fetchone()
+    while row:
+        row_str += row.__repr__() + "\n"
+        row = cursor.fetchone()
+    if not url:
         try:
             req_body = req.get_json()
         except ValueError:
             pass
         else:
-            name = req_body.get('name')
+            url = req_body.get('url')
 
-    if name:
-        return func.HttpResponse(f'{name} : {scrape_price(name)}')
+    if url and phonenumber:
+        #resp = '{} : {}, phonenumber : {}'.format(url, scrape_price(url), phonenumber)
+        return func.HttpResponse(row_str)
+    
+    elif url:
+        return func.HttpResponse(row_str)
     else:
         return func.HttpResponse(
              f'Input a price',
