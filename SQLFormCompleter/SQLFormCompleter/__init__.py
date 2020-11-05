@@ -7,37 +7,22 @@ from bs4 import BeautifulSoup
 import pyodbc
 
 #TODO: sql only changes the second row in db, changes that rather than adding new row
+server = 'bitcamp.database.windows.net'
+database = 'PriceScraper'
+username = 'fi.leul3562'
+password = 'Mrs.McKitty101'
+cnxn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+ password)
+cursor = cnxn.cursor()
+
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
-     
-     
-    server = 'bitcamp.database.windows.net'
-    database = 'PriceScraper'
-    username = 'fi.leul3562'
-    password = 'Mrs.McKitty101'
-    cnxn = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+ password)
-    cursor = cnxn.cursor()
-    row_str = ""
 
-    
-
-    
-
-   
     phonenumber = req.params.get('phonenumber')
     url = req.params.get('url')
     baseline_percentage = req.params.get('baseline_percentage')
     duration = req.params.get('duration')
     
-    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url), url) 
-    cnxn.commit()
-    cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
-
-    row = cursor.fetchone()
-    while row:
-        row_str += row.__repr__() + "\n"
-        row = cursor.fetchone()
     if not url:
         try:
             req_body = req.get_json()
@@ -46,12 +31,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         else:
             url = req_body.get('url')
 
-    if url and phonenumber:
-        #resp = '{} : {}, phonenumber : {}'.format(url, scrape_price(url), phonenumber)
-        return func.HttpResponse(row_str)
+    if url and phonenumber and baseline_percentage and duration:
+        return func.HttpResponse(update_database(url, phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url)))
     
     elif url:
-        return func.HttpResponse(row_str)
+        return func.HttpResponse(update_database(url, phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url)))
     else:
         return func.HttpResponse(
              f'Input a price',
@@ -67,7 +51,11 @@ def scrape_price(URL: str):
     soup = BeautifulSoup(page.text, 'html.parser')
 
     price_tag = soup.find(id='priceblock_ourprice')
-    price = price_tag.get_text()
+    price = ""
+    try:
+        price = price_tag.get_text()
+    except:
+        return None
     #gets the lowest price if a range is listed
     if('-' in price):
         price = price[:price.index('-')]
@@ -76,3 +64,15 @@ def scrape_price(URL: str):
     price = price.replace('$', '')
     price = float(price)
     return price
+
+def update_database(url:str, phonenumber:int, baseline_percentage:float, duration:float, original_price:float, current_price:float):
+    row_str = ""
+    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url), url) 
+    cnxn.commit()
+    cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
+
+    row = cursor.fetchone()
+    while row:
+        row_str += row.__repr__() + "\n"
+        row = cursor.fetchone()
+    return row_str
