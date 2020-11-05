@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 
 import pyodbc
 
-#TODO: sql only updates the second parameter, not actually saving in db?
+#TODO: sql only changes the second row in db, changes that rather than adding new row
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
@@ -29,9 +29,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     url = req.params.get('url')
     baseline_percentage = req.params.get('baseline_percentage')
     duration = req.params.get('duration')
-
-    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url),url)
+    
+    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url), url) 
+    cnxn.commit()
     cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
+
     row = cursor.fetchone()
     while row:
         row_str += row.__repr__() + "\n"
