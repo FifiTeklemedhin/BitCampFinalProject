@@ -68,6 +68,30 @@ def scrape_price(URL: str):
 def update_database(url:str, phonenumber:int, baseline_percentage:float, duration:float, original_price:float, current_price:float):
     row_str = ""
     cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url), url) 
+    
+    cnxn.commit()
+    cursor.execute('''WITH removing AS (
+    SELECT 
+        phonenumber, 
+        baseline_percentage, 
+        duration, 
+        original_price,
+        current_price, 
+        link,
+        ROW_NUMBER() OVER (
+            PARTITION BY 
+                phonenumber,  
+                link
+            ORDER BY 
+                phonenumber, 
+                link
+        ) row_num
+        FROM 
+            dbo.ScrapedData
+        )
+        DELETE FROM removing
+        WHERE row_num > 1;''')
+
     cnxn.commit()
     cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
 
