@@ -51,11 +51,9 @@ def scrape_price(URL: str):
     soup = BeautifulSoup(page.text, 'html.parser')
 
     price_tag = soup.find(id='priceblock_ourprice')
-    price = ""
-    try:
-        price = price_tag.get_text()
-    except:
-        return None
+    if price_tag is None:
+        price_tag = soup.find(id='priceblock_dealprice')
+    price = price_tag.get_text()
     #gets the lowest price if a range is listed
     if('-' in price):
         price = price[:price.index('-')]
@@ -94,7 +92,6 @@ def update_database(url:str, phonenumber:int, baseline_percentage:float, duratio
 
     cnxn.commit()
     cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
-
     row = cursor.fetchone()
     while row:
         row_str += row.__repr__() + "\n"
