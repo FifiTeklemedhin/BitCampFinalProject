@@ -1,4 +1,4 @@
-import logging
+ import logging
 import azure.functions as func
 
 import requests #html requests
@@ -30,12 +30,21 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             pass
         else:
             url = req_body.get('url')
-
-    if url and phonenumber and baseline_percentage and duration:
-        return func.HttpResponse(update_database(url, phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url)))
     
-    elif url:
-        return func.HttpResponse(update_database(url, phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url)))
+    if not url or scrape_price(url) == 'incompatible':
+        return func.HttpResponse(
+             f'Unable to scrape price. Try another link',
+             status_code=200
+        )
+        return
+    price = scrape_price(url)
+    if url and phonenumber and baseline_percentage and duration:
+       updatedInfo = update_database(url, phonenumber, baseline_percentage, duration, price, price)
+       #print("URL: {}\nNUM: {}\nPERCENT: {}\nDUR: {}\nORIG: {}\nCURR:{}".format(url, phonenumber, baseline_percentage, duration, price, price)
+       return func.HttpResponse(
+             updatedInfo,
+             status_code=200
+        )
     else:
         return func.HttpResponse(
              f'Input a price',
@@ -53,6 +62,8 @@ def scrape_price(URL: str):
     price_tag = soup.find(id='priceblock_ourprice')
     if price_tag is None:
         price_tag = soup.find(id='priceblock_dealprice')
+    if price_tag is None:
+        return "incompatible"
     price = price_tag.get_text()
     #gets the lowest price if a range is listed
     if('-' in price):
@@ -63,9 +74,9 @@ def scrape_price(URL: str):
     price = float(price)
     return price
 
-def update_database(url:str, phonenumber:int, baseline_percentage:float, duration:float, original_price:float, current_price:float):
-    row_str = ""
-    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, scrape_price(url), scrape_price(url), url) 
+def update_database(url:str, phonenumber:int, baseline_percentage:float, duration:float, original_price, current_price):
+    row_str = ''
+    cursor.execute("INSERT INTO dbo.ScrapedData VALUES (?,?,?,?,?,?)", phonenumber, baseline_percentage, duration, original_price, current_price, url) 
     
     cnxn.commit()
     cursor.execute('''WITH removing AS (
@@ -91,9 +102,32 @@ def update_database(url:str, phonenumber:int, baseline_percentage:float, duratio
         WHERE row_num > 1;''')
 
     cnxn.commit()
+    cursor.execute('''WITH removing AS (
+    SELECT 
+        phonenumber, 
+        baseline_percentage, 
+        duration, 
+        original_price,
+        current_price, 
+        link,
+        ROW_NUMBER() OVER (
+            PARTITION BY 
+                phonenumber,  
+                link
+            ORDER BY 
+                phonenumber, 
+                link
+        ) row_num
+        FROM 
+            dbo.ScrapedData
+        )
+        DELETE FROM removing
+        WHERE row_num > 1;''')
+    cnxn.commit()
     cursor.execute("SELECT * FROM [PriceScraper].[dbo].[ScrapedData]")
+    cnxn.commit()
     row = cursor.fetchone()
     while row:
-        row_str += row.__repr__() + "\n"
+        row_str = row_str + row.__repr__() + '\n'
         row = cursor.fetchone()
     return row_str
